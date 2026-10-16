@@ -1,0 +1,155 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "varest"
+version = "0.0.1"
+description = "Varest"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Project Neura", email = "central@projectneura.org" }
+]
+dependencies = [
+    # Core inference stack. Erbium reports torch.__version__ as 2.11.0+cu130
+    # on Linux even though package metadata freezes as torch==2.11.0.
+    "torch==2.11.0+cu130; platform_system == 'Windows'",
+    "torch==2.11.0; platform_system != 'Windows'",
+    "torchvision==0.26.0+cu130; platform_system == 'Windows'",
+    "torchvision==0.26.0; platform_system != 'Windows'",
+    "triton==3.6.0; platform_system == 'Linux'",
+    "transformers==5.5.4",
+    "tokenizers==0.22.2",
+    "huggingface_hub==1.13.0",
+    "hf-xet==1.4.3",
+    "accelerate==1.13.0",
+    "safetensors==0.7.0",
+    "sentencepiece==0.2.1",
+
+    # Dataset and scoring stack.
+    "datasets==4.8.5",
+    "pyarrow==24.0.0",
+    "pandas==3.0.2",
+    "numpy==2.4.4",
+    "scipy==1.17.1",
+    "PyYAML==6.0.3",
+    "tqdm==4.67.3",
+    "requests==2.33.1",
+    "python-Levenshtein==0.27.3",
+    "Levenshtein==0.27.3",
+
+    # CORE and Varest attach LoRA adapters through PEFT. Pure Python: it needs no
+    # build against torch, unlike the mmdet/mmcv stack CORE's OMG-Seg head used to
+    # require, which is why that head now runs on timm + transformers instead.
+    "peft==0.20.0",
+
+    # Auxiliary model utilities present in Erbium's HF/Transformers LLaVA stack.
+    # Do not add the `llava` Python package here; this repo loads LLaVA models
+    # through transformers and the Hugging Face cache.
+    "timm==1.0.27",
+    "einops==0.8.2",
+    "einops-exts==0.0.4",
+    "shortuuid==1.0.13",
+
+    # LLMOE local runtime dependencies.
+    "mipcandy==1.1.3b0",
+    "mle @ git+https://github.com/ProjectNeura/MLE",
+
+    # Erbium parity pins for transitive packages that otherwise drift when
+    # recreating the environment on a fresh machine.
+    "aiohappyeyeballs==2.6.1",
+    "aiohttp==3.13.5",
+    "aiosignal==1.4.0",
+    "annotated-doc==0.0.4",
+    "anyio==4.13.0",
+    "attrs==26.1.0",
+    "certifi==2026.4.22",
+    "charset-normalizer==3.4.7",
+    "click==8.3.3",
+    "dill==0.4.1",
+    "filelock==3.29.0",
+    "fsspec==2026.2.0",
+    "frozenlist==1.8.0",
+    "h11==0.16.0",
+    "httpcore==1.0.9",
+    "httpx==0.28.1",
+    "idna==3.13",
+    "jinja2==3.1.6",
+    "markdown-it-py==4.0.0",
+    "markupsafe==3.0.3",
+    "mdurl==0.1.2",
+    "mpmath==1.3.0",
+    "multidict==6.7.1",
+    "multiprocess==0.70.19",
+    "networkx==3.6.1",
+    "packaging==26.2",
+    "propcache==0.4.1",
+    "psutil==7.2.2",
+    "pygments==2.20.0",
+    "python-dateutil==2.9.0.post0",
+    "rapidfuzz==3.14.5",
+    "regex==2026.4.4",
+    "rich==15.0.0",
+    "setuptools==81.0.0",
+    "shellingham==1.5.4",
+    "six==1.17.0",
+    "sympy==1.14.0",
+    "typer==0.25.1",
+    "typing-extensions==4.15.0",
+    "tzdata==2026.2",
+    "urllib3==2.6.3",
+    "xxhash==3.7.0",
+    "yarl==1.23.0",
+
+    # Linux CUDA dependency versions from Erbium's torch 2.11.0 environment.
+    "nvidia-cublas==13.1.0.3; platform_system == 'Linux'",
+    "nvidia-cuda-cupti==13.0.85; platform_system == 'Linux'",
+    "nvidia-cuda-nvrtc==13.0.88; platform_system == 'Linux'",
+    "nvidia-cuda-runtime==13.0.96; platform_system == 'Linux'",
+    "nvidia-cudnn-cu13==9.19.0.56; platform_system == 'Linux'",
+    "nvidia-cufft==12.0.0.61; platform_system == 'Linux'",
+    "nvidia-cufile==1.15.1.6; platform_system == 'Linux'",
+    "nvidia-curand==10.4.0.35; platform_system == 'Linux'",
+    "nvidia-cusolver==12.0.4.66; platform_system == 'Linux'",
+    "nvidia-cusparse==12.6.3.3; platform_system == 'Linux'",
+    "nvidia-cusparselt-cu13==0.8.0; platform_system == 'Linux'",
+    "nvidia-nccl-cu13==2.28.9; platform_system == 'Linux'",
+    "nvidia-nvjitlink==13.0.88; platform_system == 'Linux'",
+    "nvidia-nvshmem-cu13==3.4.5; platform_system == 'Linux'",
+    "nvidia-nvtx==13.0.85; platform_system == 'Linux'",
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cu130", marker = "platform_system == 'Windows'" },
+]
+torchvision = [
+    { index = "pytorch-cu130", marker = "platform_system == 'Windows'" },
+]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["llmoe", "varest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["llmoe", "varest"]
+
+[project.urls]
+Homepage = "https://github.com/ProjectNeura/Varest"
+Documentation = "https://github.com/ProjectNeura/Varest"
+Repository = "https://github.com/ProjectNeura/Varest"
+
+[project.scripts]
+llmoe = "llmoe:__entry__"
+
+[tool.ruff]
+line-length = 100
