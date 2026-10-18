@@ -1,4 +1,21 @@
-# Varest
+<div align="center">
+
+<h1>Varest</h1>
+
+<p><strong>Just Respect the Semantics: Image-Token Compression via Pre-LLM Semantic Variable-Resolution Tokenization and In-LLM Relevance Pruning</strong></p>
+
+<p style="width: 80%">
+  Tianhao Fu<sup>†, 1, 2, </sup>* · Austin Wang<sup>†, 3</sup> · Charles Chen<sup>†, 1, 4</sup>, Roby Aldave-Garza<sup>5</sup>, Victor Xie<sup>3</sup>, Xiyue Jiao<sup>1</sup>, Yucheng Chen<sup>1</sup>, Martin Tin<sup>1</sup>
+</p>
+<p><sup>†</sup> Equal contribution. &nbsp; <sup>†</sup>Project lead with correspondence.</p>
+<p style="width: 80%"><span><sup>1</sup>&nbsp;University of Toronto</span>&nbsp; <span><sup>2</sup>&nbsp;Vector Institute</span>&nbsp; <span><sup>3</sup>&nbsp;McGill University</span>&nbsp; <span><sup>4</sup>&nbsp;University Health Network</span>&nbsp; <span><sup>5</sup>&nbsp;University of Waterloo</span></p>
+<p>
+  <a href="https://arxiv.org/abs/2610.18690"><img src="https://img.shields.io/badge/arXiv-2610.18690-b31b1b.svg?style=flat-square" alt="arXiv: 2610.18690"></a>
+  <a href="https://varest.github.io"><img src="https://img.shields.io/badge/Project%20Website-black.svg?style=flat-square&amp;logo=github&amp;logoColor=white" alt="Project Website"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-478A68.svg?style=flat-square" alt="License: MIT"></a>
+</p>
+
+</div>
 
 ## What is Varest?
 
