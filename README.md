@@ -5,7 +5,7 @@
 <p><strong>Just Respect the Semantics: Image-Token Compression via Pre-LLM Semantic Variable-Resolution Tokenization and In-LLM Relevance Pruning</strong></p>
 
 <p style="width: 80%">
-  Tianhao Fu<sup>†, 1, 2, </sup>* · Austin Wang<sup>†, 3</sup> · Charles Chen<sup>†, 1, 4</sup>, Roby Aldave-Garza<sup>5</sup>, Victor Xie<sup>3</sup>, Xiyue Jiao<sup>1</sup>, Yucheng Chen<sup>1</sup>, Martin Tin<sup>1</sup>
+  Tianhao&nbsp;Fu<sup>†,&nbsp;1,&nbsp;2,&nbsp;</sup>* · Austin&nbsp;Wang<sup>†,&nbsp;3</sup> · Charles&nbsp;Chen<sup>†,&nbsp;1,&nbsp;4</sup>, Roby&nbsp;Aldave-Garza<sup>5</sup>, Victor&nbsp;Xie<sup>3</sup>, Xiyue&nbsp;Jiao<sup>1</sup>, Yucheng&nbsp;Chen<sup>1</sup>, Martin&nbsp;Tin<sup>1</sup>
 </p>
 <p><sup>†</sup> Equal contribution. &nbsp; <sup>†</sup>Project lead with correspondence.</p>
 <p style="width: 80%"><span><sup>1</sup>&nbsp;University of Toronto</span>&nbsp; <span><sup>2</sup>&nbsp;Vector Institute</span>&nbsp; <span><sup>3</sup>&nbsp;McGill University</span>&nbsp; <span><sup>4</sup>&nbsp;University Health Network</span>&nbsp; <span><sup>5</sup>&nbsp;University of Waterloo</span></p>
