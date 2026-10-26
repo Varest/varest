@@ -16,6 +16,8 @@ gets the threshold LLaVA-1.5 would use at that compression, independent of how m
 """
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 import math
 from dataclasses import dataclass
 
@@ -106,9 +108,23 @@ def plan(base_fields: tuple[np.ndarray, np.ndarray, int | None], hi_fields: tupl
     k, kb, kh, tau = split(k, lay.nr, lay.nc)
     bb, bt, bk = base_fields
     hb, ht, hk = hi_fields
-    lb, _ = build_partition(bb, bt, kb, grid=(GRID, GRID), kmin=bk, tau_k=tau, text_edge_w=text_edge_w)
+    # the two views are independent: the base view's partition runs on a worker thread while this one builds the
+    # window's (the compiled merge loops release the GIL); each is the same pure computation as run alone
+    fut = _partition_pool().submit(build_partition, bb, bt, kb, grid=(GRID, GRID), kmin=bk, tau_k=tau,
+                                   text_edge_w=text_edge_w)
     lh, _ = build_partition(hb, ht, kh, grid=(lay.nr, lay.nc), kmin=hk, tau_k=tau, text_edge_w=text_edge_w)
+    lb, _ = fut.result()
     return NextPlan(k, kb, kh, tau, lb, lh)
+
+
+_POOL: ThreadPoolExecutor | None = None
+
+
+def _partition_pool() -> ThreadPoolExecutor:
+    global _POOL
+    if _POOL is None:
+        _POOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="varest-partition")
+    return _POOL
 
 
 def tokenize(base_features: torch.Tensor, window_features: torch.Tensor, p: NextPlan, lay: Layout

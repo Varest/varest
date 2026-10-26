@@ -136,8 +136,35 @@ class FakeVLM:
         raise AssertionError("the backbone's own generate must be replaced while Varest is installed")
 
 
+class FormattingVLM(FakeVLM):
+    """A backbone that exposes ``format_prompts`` (as llmoe's VLMs do): Varest then tokenizes the prompts itself."""
+
+    def format_prompts(self, prompts):
+        return [f"USER: <image>\n{p} ASSISTANT:" for p in prompts]
+
+    def device(self):                               # llmoe's HasDevice.device is a METHOD, not a property
+        return torch.device("cpu")
+
+
 @pytest.mark.skipif(not _tokenizer_available(), reason="llava-1.5-7b processor not in the local HF cache")
 class EndToEndTest(unittest.TestCase):
+    def test_prompt_only_prepare_inputs(self) -> None:
+        proc, model = _tiny_llava()
+        img = Image.fromarray((np.random.default_rng(1).random((120, 90, 3)) * 255).astype(np.uint8))
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "varest_w5reljoint.pt")
+            _tiny_checkpoint(model, "w5reljoint").save(path)
+            vlm = FormattingVLM(model, proc)
+            comp = VarestCompressor(max_tokens=32, checkpoint_path=path)
+            comp.install(vlm)
+            inputs = vlm.prepare_inputs([img], ["What is shown?"])
+            self.assertNotIn("pixel_values", inputs)
+            want = proc.tokenizer(vlm.format_prompts(["What is shown?"]), return_tensors="pt", padding=True).input_ids
+            self.assertTrue(torch.equal(inputs["input_ids"], want))
+            out = vlm.generate(inputs, max_new_tokens=4)
+            self.assertTrue(torch.equal(out[:, :want.shape[1]], want))
+            comp.uninstall()
+
     def test_install_generate_uninstall(self) -> None:
         proc, model = _tiny_llava()
         before = {k: v.clone() for k, v in model.state_dict().items()}

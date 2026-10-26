@@ -34,6 +34,7 @@ dependencies = [
     "pandas==3.0.2",
     "numpy==2.4.4",
     "scipy==1.17.1",
+    "numba==0.68.0",              # compiled W5 partition (varest/_partition_jit.py); bit-identical to the Python path
     "PyYAML==6.0.3",
     "tqdm==4.67.3",
     "requests==2.33.1",

@@ -24,7 +24,7 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from varest.partition import agglo_edges, bridge_components, cell_edges, partition_grid
+from varest.partition import agglo_edge_labels, bridge_components, cell_edges, partition_grid
 
 GRID = 24
 TEXT_EDGE_W = 0.25          # weight of the text field's gradient in the boundary map
@@ -112,24 +112,26 @@ def _build(b: np.ndarray, t: np.ndarray, k: int, inimg: np.ndarray, grid: tuple[
         if len(cells) == 0 or want <= 0:
             continue
         if want >= len(cells):
-            for c in cells:
-                out.reshape(-1)[int(c)] = nxt
-                nxt += 1
+            out.reshape(-1)[cells] = nxt + np.arange(len(cells))
+            nxt += len(cells)
             continue
         ed = bridge_components(cells, cell_edges(cells, b, nc), nc)
-        sub = agglo_edges([int(c) for c in cells], ed, int(want))
-        base = nxt
-        for c, s_ in sub.items():
-            out.reshape(-1)[int(c)] = base + int(s_)
-        nxt = base + (max(sub.values()) + 1 if sub else 0)
+        sub = agglo_edge_labels(cells, ed, int(want))          # component of each cell, first-appearance numbering
+        out.reshape(-1)[cells] = nxt + sub
+        nxt += int(sub.max()) + 1 if len(sub) else 0
     if npad:
         out[~inimg] = nxt
         nxt += 1
     flat = out.reshape(-1)
-    order = sorted(range(nxt), key=lambda j: int(np.argmax(flat == j)))
+    # raster order of each region's first cell: a stable sort of the first indices (a label with no cell sorts as
+    # index 0, as np.argmax of an all-False mask did) -- the same order as sorting by np.argmax(flat == j)
+    first = np.zeros(nxt, np.int64)
+    u, fi = np.unique(flat, return_index=True)
+    ok = (u >= 0) & (u < nxt)
+    first[u[ok]] = fi[ok]
+    order = np.argsort(first, kind="stable")
     remap = np.empty(nxt, np.int64)
-    for new, old in enumerate(order):
-        remap[old] = new
+    remap[order] = np.arange(nxt, dtype=np.int64)
     out = remap[flat].reshape(nr, nc)
     info = {"tokens": int(nxt), "n_text": n_text, "k_min": int(k_min), "k_obj": int(k_obj_n), "k_txt": int(k_txt_n),
             "regime": regime, "pinned": bool(pinned), "text_thr": float(text_thr)}

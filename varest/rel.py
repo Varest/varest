@@ -154,7 +154,7 @@ def forward_loss(text_model: nn.Module, lm_head: nn.Module, head: RelHead, embs:
 @torch.no_grad()
 def generate_pruned(text_model: nn.Module, lm_head: nn.Module, embed: nn.Module, head: RelHead | None, e: torch.Tensor,
                     spans: tuple[int, int, int, int], kp: int, rel_layer: int | None, max_new_tokens: int, eos_id: int,
-                    halt: HaltConfig | None = None) -> tuple[list[int], dict]:
+                    halt: HaltConfig | None = None, decoder=None) -> tuple[list[int], dict]:
     """Greedy decoding with HARD pruning (B=1). ``e [1, T, D]`` are the prompt embeddings including the [REL]
     tokens; ``spans`` as in :func:`forward_loss`. Layers < ``rel_layer`` see all T positions; at ``rel_layer`` the
     visual tokens outside the top ``kp`` and the [REL] registers are deleted (their KV never enters later layers); the
@@ -164,7 +164,10 @@ def generate_pruned(text_model: nn.Module, lm_head: nn.Module, embed: nn.Module,
     ``halt`` adds adaptive halting (:mod:`varest.halt`): at the layer the cascade fires, every visual token still
     present -- and the [REL] registers, if [REL] has not pruned yet, in which case it never runs -- is deleted. With
     ``head=None`` / ``rel_layer=None`` (W5, no [REL]; ``spans`` then carries ``nr = 0``) only halting prunes.
-    ``halt=None`` is exactly the [REL]-only decoding above."""
+    ``halt=None`` is exactly the [REL]-only decoding above.
+
+    ``decoder``: a :class:`varest.graphdecode.GraphDecoder` to replay the token loop from a CUDA graph after the
+    (unchanged) prefill, when the prompt fits its capacity; ``None`` runs the eager loop below."""
     from transformers import DynamicCache
     a0, b0, r0, nr = spans
     t = e.shape[1]
@@ -198,6 +201,8 @@ def generate_pruned(text_model: nn.Module, lm_head: nn.Module, embed: nn.Module,
         h = layer(h, attention_mask=None, position_ids=pos, position_embeddings=pe, past_key_values=cache,
                   use_cache=True)
     nxt = int(lm_head(text_model.norm(h[:, -1:]))[0, -1].argmax())
+    if decoder is not None and decoder.fits(cache, max_new_tokens):
+        return decoder.decode(cache, nxt, t, max_new_tokens, eos_id), info
     out: list[int] = []
     p = t
     for _ in range(max_new_tokens):

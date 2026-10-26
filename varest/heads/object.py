@@ -96,23 +96,35 @@ def pool_edges(e: np.ndarray | torch.Tensor, nr: int, nc: int) -> torch.Tensor:
     """``[2, NR, NC]`` fine boundary strengths -> ``[2, nr, nc]`` on a coarser grid, by MAX over crossing edges.
 
     The coarse grid is mapped linearly onto the fine one, so this reduces onto ANY cell grid (a letterboxed window,
-    a squashed view) without resampling the image."""
-    e = torch.as_tensor(np.asarray(e), dtype=torch.float32)
+    a squashed view) without resampling the image. The right edge of coarse cell (i, j) is the max of fine column
+    ``cb[j+1]-1`` over fine rows ``[rb[i], max(rb[i+1], rb[i]+1))``; the down edge likewise with rows and columns
+    swapped; the last column / row has no right / down edge (0). Vectorised with ``np.maximum.reduceat``, which over
+    ``[rb[i], rb[i+1])`` is exactly that max and, for an empty range, the single element ``rb[i]`` -- the same values as
+    the per-cell loop it replaces (max is exact)."""
+    e = np.asarray(torch.as_tensor(np.asarray(e), dtype=torch.float32))
     big_r, big_c = e.shape[1], e.shape[2]
-    out = torch.zeros(2, nr, nc)
+    out = np.zeros((2, nr, nc), np.float32)
     rb = np.linspace(0, big_r, nr + 1).round().astype(int)
     cb = np.linspace(0, big_c, nc + 1).round().astype(int)
-    for i in range(nr):
-        for j in range(nc):
-            if j + 1 < nc:
-                col = max(cb[j + 1] - 1, 0)
-                seg = e[0, rb[i]:max(rb[i + 1], rb[i] + 1), col]
-                out[0, i, j] = seg.max() if seg.numel() else 0.0
-            if i + 1 < nr:
-                row = max(rb[i + 1] - 1, 0)
-                seg = e[1, row, cb[j]:max(cb[j + 1], cb[j] + 1)]
-                out[1, i, j] = seg.max() if seg.numel() else 0.0
-    return out
+    if nc > 1:
+        cols = np.maximum(cb[1:nc] - 1, 0)                     # the fine column each right edge crosses
+        out[0, :, :nc - 1] = _segment_max(e[0][:, cols], rb[:nr], big_r, axis=0)
+    if nr > 1:
+        rows = np.maximum(rb[1:nr] - 1, 0)
+        out[1, :nr - 1, :] = _segment_max(e[1][rows, :], cb[:nc], big_c, axis=1)
+    return torch.from_numpy(out)
+
+
+def _segment_max(a: np.ndarray, starts: np.ndarray, n: int, axis: int) -> np.ndarray:
+    """Max of ``a`` over ``[starts[k], starts[k+1])`` along ``axis`` (the last range runs to ``n``); an empty range
+    gives the single element at its start, and a start at ``n`` itself (past the end) gives 0."""
+    ok = starts < n
+    r = np.maximum.reduceat(a, np.minimum(starts, n - 1), axis=axis)
+    if not ok.all():
+        idx = [slice(None)] * a.ndim
+        idx[axis] = ~ok
+        r[tuple(idx)] = 0.0
+    return r
 
 
 def object_head_from_state(blob: dict[str, Any]) -> ObjectHead:

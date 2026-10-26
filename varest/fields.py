@@ -15,7 +15,8 @@ Both fields are stored in float16, exactly as the training caches were; the buil
 
 DECODING. The released checkpoints were trained and evaluated on fields whose boundary branch decoded large JPEGs with
 PIL's ``draft`` (DCT-domain downscaling to at least the head's input size). Passing a file path reproduces that decode;
-passing a decoded image gives the plain full-resolution decode.
+passing a decoded image gives the plain full-resolution decode. A :class:`varest.gpuimage.DeviceImage` runs the same
+steps on the GPU, the draft included, to within one grey level of PIL.
 """
 from __future__ import annotations
 
@@ -26,6 +27,7 @@ import numpy as np
 import torch
 from PIL import Image
 
+from varest.gpuimage import DeviceImage, luma
 from varest.heads.object import ObjectHead, pool_edges, raw_grid
 from varest.heads.text import TextHead, cell_shape
 from varest.tokenizer import GRID, TEXT_EDGE_W, kmin_from_curve, text_cut
@@ -33,7 +35,7 @@ from varest.tokenizer import GRID, TEXT_EDGE_W, kmin_from_curve, text_cut
 PAD_EDGE = 9.0          # boundary between image and letterbox: above any real boundary, so regions never straddle it
 OBJ_LONG = 768          # the object head's trained long side (48 cells of 16 px)
 
-ImageLike = Image.Image | str | PathLike[str]
+ImageLike = Image.Image | DeviceImage | str | PathLike[str]
 
 
 @dataclass
@@ -62,16 +64,23 @@ def _device(module: torch.nn.Module) -> torch.device:
 
 
 @torch.no_grad()
-def text_probabilities(head: TextHead, image: Image.Image, n_rows: int, n_cols: int) -> np.ndarray:
+def text_probabilities(head: TextHead, image: Image.Image | DeviceImage, n_rows: int, n_cols: int) -> np.ndarray:
     """Text head on ``image`` resized to ``n_cols x n_rows`` cells -> float32 ``[n_rows, n_cols]`` probabilities."""
-    g = image.convert("L").resize((n_cols * head.cell_px, n_rows * head.cell_px), Image.BICUBIC)
-    x = torch.from_numpy(np.array(g, dtype=np.uint8)).to(_device(head)).float()[None, None] / 255.0
+    size = (n_cols * head.cell_px, n_rows * head.cell_px)
+    if isinstance(image, DeviceImage):
+        x = image.resized(size, gray=True)[None] / 255.0
+    else:
+        g = image.convert("L").resize(size, Image.BICUBIC)
+        x = torch.from_numpy(np.array(g, dtype=np.uint8)).to(_device(head)).float()[None, None] / 255.0
     return torch.sigmoid(head(x)[0]).float().cpu().numpy().reshape(n_rows, n_cols)
 
 
 @torch.no_grad()
-def object_edges(head: ObjectHead, image: Image.Image, n_rows: int, n_cols: int) -> torch.Tensor:
+def object_edges(head: ObjectHead, image: Image.Image | DeviceImage, n_rows: int, n_cols: int) -> torch.Tensor:
     """Object head on ``image`` resized to ``n_cols x n_rows`` of its own cells -> float32 ``[2, n_rows, n_cols]``."""
+    if isinstance(image, DeviceImage):
+        x = image.resized((n_cols * head.cell_px, n_rows * head.cell_px))
+        return head((x if head.rgb else luma(x))[None] / 255.0)[0].float().cpu()
     x = image.resize((n_cols * head.cell_px, n_rows * head.cell_px), Image.BICUBIC)
     a = np.asarray(x if head.rgb else x.convert("L"), np.uint8)
     t = torch.from_numpy(a.copy())
@@ -79,7 +88,10 @@ def object_edges(head: ObjectHead, image: Image.Image, n_rows: int, n_cols: int)
     return head(t)[0].float().cpu()
 
 
-def _open(image: ImageLike, draft_to: tuple[int, int] | None, mode: str) -> Image.Image:
+def _open(image: ImageLike, draft_to: tuple[int, int] | None, mode: str) -> Image.Image | DeviceImage:
+    if isinstance(image, DeviceImage):
+        assert mode == "RGB", mode
+        return image if draft_to is None else image.draft(draft_to)
     if isinstance(image, Image.Image):
         return image.convert(mode)
     with Image.open(image) as im:
@@ -89,22 +101,27 @@ def _open(image: ImageLike, draft_to: tuple[int, int] | None, mode: str) -> Imag
 
 
 def _size(image: ImageLike) -> tuple[int, int]:
-    if isinstance(image, Image.Image):
+    if isinstance(image, (Image.Image, DeviceImage)):
         return image.size
     with Image.open(image) as im:
         return im.size
 
 
-def llava_fields(image: ImageLike, text_head: TextHead, object_head: ObjectHead) -> LlavaFields:
-    """Both fields of one image on LLaVA-1.5's padded 24x24 grid. ``image`` is a PIL image or a file path."""
+def llava_fields(image: ImageLike, text_head: TextHead, object_head: ObjectHead, *,
+                 gray: Image.Image | None = None) -> LlavaFields:
+    """Both fields of one image on LLaVA-1.5's padded 24x24 grid. ``image`` is a PIL image or a file path.
+
+    ``gray``: the file's grayscale decode, ``Image.open(image).convert("L")``, when the caller already holds the
+    decoded file (the engine converts ONE decode to both RGB for CLIP and L for the text head, which is pixel-for-pixel
+    what two separate opens produce). The object head still decodes the file itself, with the JPEG draft."""
     w, h = _size(image)
     r0, nr, c0, nc = cell_shape(w, h)
     inimg = np.zeros((GRID, GRID), bool)
     inimg[r0:r0 + nr, c0:c0 + nc] = True
     # text: the head on the in-image cells; 0 (no textness) on the letterbox
-    if isinstance(image, Image.Image):
+    if isinstance(image, (Image.Image, DeviceImage)):
         gray = image
-    else:
+    elif gray is None:
         with Image.open(image) as im:
             gray = im.convert("L")
     text = np.zeros((GRID, GRID), np.float32)

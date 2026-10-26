@@ -38,6 +38,21 @@ SLUGS = {"llava": "llava-1.5-7b", "llava-13b": "llava-1.5-13b", "llava-next-8b":
 DEFAULT_MAX_TOKENS = 64
 
 
+def _prompt_only_inputs(vlm: Any, prompts: Any) -> Any | None:
+    """The backbone's formatted prompts, tokenized without the image processor; ``None`` when the backbone does not
+    expose ``format_prompts`` and a tokenizer (then its own ``prepare_inputs`` runs)."""
+    fmt = getattr(vlm, "format_prompts", None)
+    tok = getattr(getattr(vlm, "processor", None), "tokenizer", None)
+    if fmt is None or tok is None:
+        return None
+    configure = getattr(vlm, "_configure_generation_tokenizer", None)
+    if callable(configure):
+        configure()
+    from transformers import BatchFeature
+    enc = BatchFeature(dict(tok(list(fmt(list(prompts))), return_tensors="pt", padding=True)))
+    return enc.to(next(vlm.model.parameters()).device)
+
+
 class VarestCompressor(TokenCompressor):
     """W5RELJOINT: the W5 variable-resolution tokenizer plus [REL] pruning inside the LLM, trained jointly."""
 
@@ -136,7 +151,12 @@ class VarestCompressor(TokenCompressor):
         prepare = self._orig_prepare_inputs
 
         def prepare_inputs(images, prompts, **kwargs):
-            inputs = prepare(images, prompts, **kwargs)
+            # Varest builds its visual tokens from the raw image inside generate(); the backbone's processor output
+            # (pixel_values, image-token expansion) is never read, so only the prompts are tokenized -- the returned
+            # ids only set the width the backbone strips before decoding, and the answers are the same
+            inputs = _prompt_only_inputs(vlm, prompts)
+            if inputs is None:
+                inputs = prepare(images, prompts, **kwargs)
             inputs._varest_rows = (list(images), list(prompts))
             return inputs
 
